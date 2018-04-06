@@ -11,20 +11,16 @@ import cv2
 CAMINHO_IMAGENS_TREINO = 'Treino/'
 CAMINHO_IMAGENS_TESTE = 'Teste/'
 CAMINHO_CLASSIFICADOR = 'classifier.joblib.pkl'
+
 def describe(nPontos, raio, image, eps = 1e-7):
- 	lbp = feature.local_binary_pattern(image, nPontos,
-			raio, method="uniform")
-
- 	(hist, _) = np.histogram(lbp.ravel(),
-			bins=np.arange(0, nPontos + 3),
-			range=(0,nPontos + 2))
- 
- 	hist = hist.astype('float')
- 	hist /= (hist.sum() + eps)	#Tira a norma
-
- 	return hist
+    lbp = feature.local_binary_pattern(image, nPontos, raio, method="uniform")
+    (hist, _) = np.histogram(lbp.ravel(), bins=np.arange(0, nPontos + 3), range=(0,nPontos + 2))
+    hist = hist.astype('float')
+    hist /= (hist.sum() + eps)	#Tira a norma
+    return hist
 
 labels = []
+data = []
 def parse_image(path, training):
  	print("Treinando a imagem ", path)
  	img = cv2.imread(path)
@@ -37,12 +33,22 @@ def parse_image(path, training):
  	return hist
 
 
-# data = [parse_image(path, True) for path in paths.list_images(CAMINHO_IMAGENS_TREINO)]
-# modelo = LinearSVC(C = 100.0, random_state = 42)
-# modelo.fit(data, labels)
-# print("Persistindo dados...")
-# joblib.dump(modelo, CAMINHO_CLASSIFICADOR, compress = 9)
-# print("Pronto")
+for root, dirs, files in os.walk(CAMINHO_IMAGENS_TREINO):
+    for file in files:
+        path = root + file
+        data.append({'class': path.split('/')[1][0], 'data': parse_image(path, True)})
+print("DATA", data)
+ 
+clfa = KNeighborsClassifier(n_neighbors=3)
+
+X_train, X_test, y_train, y_test = train_test_split([i['data'] for i in data], set([ i['class'] for i in data]),test_size=.3, random_state=42)
+
+
+print("OPAAA", X_train, X_test, y_train, y_test)
+clfa = clfa.fit(X_train, y_train)
+
+
+
 modelo = joblib.load(CAMINHO_CLASSIFICADOR)
 ok = 0; err = 0;
 for root, dirs, files in os.walk(CAMINHO_IMAGENS_TESTE):
