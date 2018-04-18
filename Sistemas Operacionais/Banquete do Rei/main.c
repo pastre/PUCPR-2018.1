@@ -1,38 +1,50 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <windows.h>
+#include <time.h>
 
 #define MAX_PRATOS 12
-#define MAX_CONVIDADOS 20
-#define COOK_TIME 100
+#define MAX_CONVIDADOS 30
+#define COOK_TIME 1000
 #define TRUE 1
 #define FALSE 0
-#define EAT_TIME 3
+#define TEMPO_REI 5000
 
 int pratos_disp = MAX_PRATOS;
 int chamaCozinheiro = FALSE;
 int cozinhando = FALSE;
 int nServidos = 0;
-
+int refeicoesPorSeg = 0;
+int a[MAX_CONVIDADOS];
 HANDLE comeMutex;
 //TODO: TYPEDEF STRUCT COM UM ID, PARA MARCAR NUM VETOR QUEM COMEU QUANTO
 
+int eat_time(){
+    srand(time(NULL));
+    int ret = (rand() % 4 + 2)*100;
+    return ret;
+}
+
 DWORD WINAPI init_convidado(void* data){
-    printf("Convidado chegou! \n");
     DWORD dwWaitResult;
+    int id = (int) data;
+    printf("Convidado chegou! ID: %d\n", id);
     while(1)
     {
-        if(cozinhando)
+        if(cozinhando){
             Sleep(1);
+            continue;
+        }
         dwWaitResult = WaitForSingleObject(comeMutex, INFINITE);
         switch (dwWaitResult)
         {// The thread got ownership of the mutex
         case WAIT_OBJECT_0:
             if(pratos_disp >0)
             {
-                Sleep(EAT_TIME);
+                printf("%d comeu! Pratos disponiveis: %d\n", id, pratos_disp);
                 pratos_disp --;
-                printf("%d comeu! Pratos: %d\n", GetCurrentThreadId(), pratos_disp);
+                refeicoesPorSeg ++;
+                a[id]++;
             }
             else if(!cozinhando && !chamaCozinheiro)
             {
@@ -42,7 +54,8 @@ DWORD WINAPI init_convidado(void* data){
             if (! ReleaseMutex(comeMutex))
             {
                 printf("Falha opra liberar");
-            }
+            }else{
+                Sleep(eat_time());}
             break;
         case WAIT_ABANDONED:
             printf("OOPS");
@@ -78,12 +91,13 @@ DWORD WINAPI init_cozinheiro(void* data){
 }
 
 int main(){
-    HANDLE cozinheiro = CreateThread(NULL, 0, init_cozinheiro, NULL, 0, NULL);;
+    HANDLE cozinheiro = CreateThread(NULL, 0, init_cozinheiro, NULL, 0, NULL);
     HANDLE * convidados = (HANDLE * ) malloc(MAX_CONVIDADOS * sizeof(HANDLE));
+    DWORD dwWaitResult;
     int sai = FALSE;
     for (int i = 0; i < MAX_CONVIDADOS; i++)
-        convidados[i] = CreateThread(NULL, 0, init_convidado, NULL, 0, NULL);
-
+        convidados[i] = CreateThread(NULL, 0, init_convidado, (void *) i, 0, NULL);
+    int tmp;
     comeMutex = CreateMutex(NULL, FALSE, NULL);
   //  SuspendThread(cozinheiro);
     while(1)
@@ -96,16 +110,37 @@ int main(){
         }
         if (sai)
             break;
-        if(chamaCozinheiro){
-            for (int i = 0; i < MAX_CONVIDADOS; i++)
-                SuspendThread(convidados[i]);
-            ResumeThread(cozinheiro);
-            SuspendThread(cozinheiro);
-            for (int i = 0; i < MAX_CONVIDADOS; i++)
-                ResumeThread(convidados[i]);
-//
+        Sleep(TEMPO_REI);
+        dwWaitResult = WaitForSingleObject(comeMutex, INFINITE);
+        switch (dwWaitResult)
+        {// The thread got ownership of the mutex
+        case WAIT_OBJECT_0:
+            printf("Pratos total: %d\n", refeicoesPorSeg);
+            if (! ReleaseMutex(comeMutex))
+            {
+                printf("Falha opra liberar");
+            }
+            for(int j = 0; j < MAX_CONVIDADOS; j++){
+                printf("\t%d comeu %d pratos\n", j, a[j]);
+            }
+            if(refeicoesPorSeg >=3000){
+                for(int j = 0; j < MAX_CONVIDADOS; j++){
+                    TerminateThread(convidados[j], 0);
+                    printf("O convidado %d foi embora\n", j);
+                }
+                TerminateThread(cozinheiro, 0);
+                printf("O cozinheiro foi embora\nO banquete acabou!\n");
+                system("pause");
+                return 0;
+            }
+            Sleep(10000);
+            break;
+        case WAIT_ABANDONED:
+            printf("OOPS");
+            break;
         }
     }
+
 
     return 0;
 }
